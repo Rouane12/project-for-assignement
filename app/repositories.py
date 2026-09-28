@@ -55,6 +55,31 @@ class MaintenanceRepository:
         return request
 
 
+class GuestIssueRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(
+        self,
+        *,
+        reservation_id: int,
+        category: str,
+        description: str,
+        urgency: str,
+    ) -> models.GuestIssue:
+        issue = models.GuestIssue(
+            reservation_id=reservation_id,
+            category=category,
+            description=description,
+            urgency=urgency,
+            status="open",
+        )
+        self.db.add(issue)
+        self.db.commit()
+        self.db.refresh(issue)
+        return issue
+
+
 class WebhookRepository:
     def __init__(self, db: Session):
         self.db = db
