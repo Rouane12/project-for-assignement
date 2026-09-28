@@ -34,6 +34,17 @@ class MaintenanceRequest(Base):
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="open")
 
 
+class GuestIssue(Base):
+    __tablename__ = "guest_issues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reservation_id: Mapped[int] = mapped_column(ForeignKey("reservations.id"), nullable=False)
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    urgency: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="open")
+
+
 class ProcessedWebhook(Base):
     __tablename__ = "processed_webhooks"
 
