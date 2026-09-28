@@ -30,6 +30,20 @@ class Severity(str, Enum):
     high = "high"
 
 
+class GuestIssueCategory(str, Enum):
+    access = "access"
+    noise = "noise"
+    cleanliness = "cleanliness"
+    appliance = "appliance"
+    other = "other"
+
+
+class GuestIssueUrgency(str, Enum):
+    low = "low"
+    normal = "normal"
+    high = "high"
+
+
 class ReservationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -68,6 +82,25 @@ class MaintenanceRequestOut(BaseModel):
     issue_type: str
     description: str
     severity: str
+    status: str
+
+
+class GuestIssueCreate(BaseModel):
+    category: GuestIssueCategory
+    description: str = Field(min_length=5, max_length=500)
+    urgency: GuestIssueUrgency
+
+
+class GuestIssueOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    reservation_id: int
+    property_name: str
+    guest_name: str
+    category: str
+    description: str
+    urgency: str
     status: str
 
 
