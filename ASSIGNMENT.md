@@ -1,4 +1,4 @@
-# Product Engineer Practice Assessment
+# Product Engineer Practice Assessment 2
 
 **Timebox: 2 hours**
 
@@ -6,52 +6,56 @@
 
 StayOps is a small operations platform for short-term-rental teams.
 
-The system already stores reservations, creates cleaning tasks, and receives payment webhooks. Operations now needs a maintenance workflow, and two existing behaviors have caused problems in production-like testing.
+The product already stores reservations, creates cleaning tasks, and receives payment webhooks. Operations has reported three problems:
+
+1. guest issues are still being handled manually outside the platform;
+2. reservation status updates can move into impossible states;
+3. repeated clicks can create duplicate scheduled cleaning tasks for the same stay.
 
 Your goal is to implement the requested behavior without unnecessarily redesigning the application.
 
 ---
 
-## Task 1 — Add maintenance requests
+## Task 1 — Add guest issues
 
 Implement:
 
 ```http
-POST /api/reservations/{reservation_id}/maintenance-requests
+POST /api/reservations/{reservation_id}/guest-issues
 ```
 
 Request body:
 
 ```json
 {
-  "issue_type": "heating",
-  "description": "The bedroom radiator is not warming up.",
-  "severity": "medium"
+  "category": "access",
+  "description": "The keypad code is being rejected.",
+  "urgency": "high"
 }
 ```
 
-Supported `issue_type` values:
+Supported `category` values:
 
-- `plumbing`
 - `access`
-- `heating`
-- `electrical`
+- `noise`
+- `cleanliness`
+- `appliance`
 - `other`
 
-Supported `severity` values:
+Supported `urgency` values:
 
 - `low`
-- `medium`
+- `normal`
 - `high`
 
 Expected behavior:
 
-- Return **201** when the request is created.
+- Return **201** when the guest issue is created.
 - Return **404** when the reservation does not exist.
-- Return **409** when the reservation is cancelled.
+- Return **409** when the reservation is already `cancelled` or `checked_out`.
 - Invalid enum values should be rejected through normal request validation.
-- The created maintenance request starts with status `open`.
-- The response should include the property name.
+- New guest issues start with status `open`.
+- The response must include both `property_name` and `guest_name` from the reservation.
 - Keep HTTP concerns in the route and business rules outside the route.
 
 Example response:
@@ -61,16 +65,46 @@ Example response:
   "id": 1,
   "reservation_id": 1,
   "property_name": "Marina Loft",
-  "issue_type": "heating",
-  "description": "The bedroom radiator is not warming up.",
-  "severity": "medium",
+  "guest_name": "Maya Chen",
+  "category": "access",
+  "description": "The keypad code is being rejected.",
+  "urgency": "high",
   "status": "open"
 }
 ```
 
+Some supporting persistence/schema pieces are already present in the codebase. Inspect before adding new abstractions.
+
 ---
 
-## Task 2 — Fix the cleaning-task bug
+## Task 2 — Protect reservation status transitions
+
+Existing endpoint:
+
+```http
+PATCH /api/reservations/{reservation_id}/status
+```
+
+Current bug:
+
+The endpoint currently allows any valid status to replace any other valid status. That means impossible transitions such as `cancelled -> checked_in` can happen.
+
+Required transition rules:
+
+- `confirmed -> checked_in`
+- `confirmed -> cancelled`
+- `checked_in -> checked_out`
+- repeating the current status is harmless and should return the reservation successfully
+- `checked_out` is terminal
+- `cancelled` is terminal
+- all other transitions → **409 Conflict**
+- missing reservation → **404**
+
+Keep the transition rule in one sensible business-logic location.
+
+---
+
+## Task 3 — Prevent duplicate scheduled cleaning tasks
 
 Existing endpoint:
 
@@ -80,47 +114,16 @@ POST /api/reservations/{reservation_id}/cleaning-tasks
 
 Current bug:
 
-A cleaning task can be created for a reservation whose status is already `cancelled`.
+Calling the endpoint twice for the same active reservation creates two `scheduled` cleaning tasks.
 
 Required behavior:
 
-- Existing reservation + active status → create task as before.
-- Missing reservation → **404**.
-- Cancelled reservation → **409 Conflict**.
-- Keep the business rule in one sensible place rather than duplicating it across routes.
-
----
-
-## Task 3 — Make payment webhooks idempotent
-
-Existing endpoint:
-
-```http
-POST /api/webhooks/payments
-```
-
-Payment providers can retry the same webhook. The current implementation processes the same `event_id` more than once.
-
-That means this request sent twice:
-
-```json
-{
-  "event_id": "evt_1001",
-  "reservation_id": 1,
-  "status": "paid"
-}
-```
-
-currently increments the reservation's `payment_notifications_sent` twice.
-
-Required behavior:
-
-- The first delivery should be processed normally.
-- A repeated `event_id` must **not** repeat the side effect.
-- A duplicate should still receive a successful HTTP response so the provider does not keep retrying.
-- The response must make it clear whether the event was a duplicate.
-- Missing reservation → **404**.
-- Do not solve this with a global Python set; use the persistence layer already present in the project.
+- Active reservation with no scheduled cleaning task → **201**
+- Missing reservation → **404**
+- Cancelled reservation → **409**
+- If a `scheduled` cleaning task already exists for that reservation → **409**
+- Do not solve this with a global Python set or request-local state; determine the answer from persisted data.
+- Keep the duplicate rule in the business/service layer, with persistence concerns in the repository.
 
 ---
 
@@ -128,11 +131,13 @@ Required behavior:
 
 Add focused tests covering at least:
 
-1. successful maintenance request creation;
-2. maintenance request for missing reservation;
-3. maintenance request for cancelled reservation;
-4. cleaning task rejected for cancelled reservation;
-5. duplicate payment webhook does not repeat the notification side effect.
+1. successful guest-issue creation;
+2. guest issue for a missing reservation;
+3. guest issue rejected for a terminal reservation;
+4. legal reservation status transition succeeds;
+5. illegal reservation status transition returns 409;
+6. repeating the current reservation status succeeds;
+7. duplicate scheduled cleaning task returns 409.
 
 You may add additional tests if useful, but prioritize the required behavior over test volume.
 
