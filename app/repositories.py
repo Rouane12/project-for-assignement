@@ -11,10 +11,14 @@ class ReservationRepository:
     def get(self, reservation_id: int) -> models.Reservation | None:
         return self.db.get(models.Reservation, reservation_id)
 
-    def save(self, reservation: models.Reservation) -> models.Reservation:
+    def save(
+        self,
+        reservation: models.Reservation,
+    ) -> models.Reservation:
         self.db.add(reservation)
         self.db.commit()
         self.db.refresh(reservation)
+
         return reservation
 
 
@@ -22,11 +26,30 @@ class CleaningTaskRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, reservation_id: int) -> models.CleaningTask:
-        task = models.CleaningTask(reservation_id=reservation_id, status="scheduled")
+    def has_scheduled_for_reservation(
+        self,
+        reservation_id: int,
+    ) -> bool:
+        statement = select(models.CleaningTask).where(
+            models.CleaningTask.reservation_id == reservation_id,
+            models.CleaningTask.status == "scheduled",
+        )
+
+        return self.db.scalar(statement) is not None
+
+    def create(
+        self,
+        reservation_id: int,
+    ) -> models.CleaningTask:
+        task = models.CleaningTask(
+            reservation_id=reservation_id,
+            status="scheduled",
+        )
+
         self.db.add(task)
         self.db.commit()
         self.db.refresh(task)
+
         return task
 
 
@@ -49,9 +72,11 @@ class MaintenanceRepository:
             severity=severity,
             status="open",
         )
+
         self.db.add(request)
         self.db.commit()
         self.db.refresh(request)
+
         return request
 
 
@@ -74,9 +99,11 @@ class GuestIssueRepository:
             urgency=urgency,
             status="open",
         )
+
         self.db.add(issue)
         self.db.commit()
         self.db.refresh(issue)
+
         return issue
 
 
@@ -84,12 +111,24 @@ class WebhookRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def has_processed(self, event_id: str) -> bool:
+    def has_processed(
+        self,
+        event_id: str,
+    ) -> bool:
         statement = select(models.ProcessedWebhook).where(
             models.ProcessedWebhook.event_id == event_id
         )
+
         return self.db.scalar(statement) is not None
 
-    def mark_processed(self, event_id: str) -> None:
-        self.db.add(models.ProcessedWebhook(event_id=event_id))
+    def mark_processed(
+        self,
+        event_id: str,
+    ) -> None:
+        self.db.add(
+            models.ProcessedWebhook(
+                event_id=event_id
+            )
+        )
+
         self.db.commit()
